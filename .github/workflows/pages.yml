@@ -1,6 +1,6 @@
+# File: .github/workflows/pages.yml
 name: Deploy to GitHub Pages
 
-# Required permissions for GitHub Pages
 permissions:
   contents: read
   pages: write
@@ -16,23 +16,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository using latest v4
       - uses: actions/checkout@v4
 
-      # Prepare deployment directory
       - name: Prepare deploy folder
         run: |
+          rm -rf deploy
           mkdir deploy
           cp public/index.html deploy/index.html
           cp -R src deploy/src
 
-      # Configure GitHub Pages
       - uses: actions/configure-pages@v3
+        with:
+          enablement: workflow
 
-      # Upload the deploy folder as Pages artifact (v2)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: deploy
 
-      # Deploy to GitHub Pages
       - uses: actions/deploy-pages@v1
