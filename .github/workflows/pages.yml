@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository
-      - uses: actions/checkout@v3
+      # Checkout the repository using latest v4
+      - uses: actions/checkout@v4
 
-      # Prepare deployment directory containing public/index.html and src/
+      # Prepare deployment directory
       - name: Prepare deploy folder
         run: |
           mkdir deploy
@@ -23,8 +23,8 @@ jobs:
       # Configure GitHub Pages
       - uses: actions/configure-pages@v3
 
-      # Upload the deploy folder as Pages artifact
-      - uses: actions/upload-pages-artifact@v1
+      # Upload the deploy folder as Pages artifact (v2)
+      - uses: actions/upload-pages-artifact@v2
         with:
           path: deploy
 
