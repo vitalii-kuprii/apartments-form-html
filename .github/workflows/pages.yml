@@ -1,6 +1,6 @@
 name: Deploy to GitHub Pages
 
-# Required permissions for GitHub Pages
+# Потрібні дозволи для GitHub Pages
 permissions:
   contents: read
   pages: write
@@ -16,32 +16,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository using latest v41
+      # 1) Забираємо код
       - uses: actions/checkout@v4
 
-      # Prepare deployment directory
+      # 2) Готуємо папку для деплою (копіюємо index.html та весь src/)
       - name: Prepare deploy folder
         run: |
+          rm -rf deploy
           mkdir deploy
-          cp public/index.html deploy/index.html
+          cp index.html deploy/index.html
           cp -R src deploy/src
 
-            # Enable Pages via API (idempotent)
+      # 3) Увімкнення GitHub Pages вручну через API (якщо треба)
       - name: Enable GitHub Pages via API
+        env:
+          PAGES_TOKEN: ${{ secrets.GH_PAGES_TOKEN }} # ваш PAT із правом repo
         run: |
           curl -X PUT \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer $PAGES_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }}/pages \
             -d '{"source":{"branch":"main","path":"/"}}'
 
-      # Configure GitHub Pages
+      # 4) Налаштовуємо Pages (enablement через Actions)
       - uses: actions/configure-pages@v3
+        with:
+          enablement: workflow
 
-      # Upload the deploy folder as Pages artifact (v2)
+      # 5) Завантажуємо артефакт (папку deploy)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: deploy
 
-      # Deploy to GitHub Pages
+      # 6) Розгортаємо на GitHub Pages
       - uses: actions/deploy-pages@v1
