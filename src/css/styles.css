@@ -1,0 +1,211 @@
+:root {
+  --color-bg: #fff;
+  --color-primary: #007bff;
+  --color-focus: #0056b3;
+  --color-error: #e74c3c;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f5f5f5;
+  font-family: Arial, sans-serif;
+  color: #333;
+}
+.container {
+  width: 100%;
+  max-width: 480px;
+  padding: 1rem;
+  background: var(--color-bg);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.form-header {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+.form-title {
+  margin: 0 auto;
+  text-align: center;
+  font-size: 1.5rem;
+}
+.lang-dropdown {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 1000;
+}
+.lang-dropdown__toggle {
+  background: var(--color-bg);
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.lang-dropdown__toggle:hover,
+.lang-dropdown__toggle:focus {
+  border-color: var(--color-primary);
+  background: rgba(0, 123, 255, 0.1);
+  outline: none;
+}
+.lang-dropdown__toggle .flag {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.lang-dropdown__menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--color-bg);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  list-style: none;
+  padding: 0.25rem 0.5rem;
+  display: none;
+  z-index: 1100;
+}
+.lang-dropdown__menu.show {
+  display: block;
+}
+.lang-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+.lang-dropdown__item:hover,
+.lang-dropdown__item:focus {
+  background: rgba(0, 123, 255, 0.1);
+}
+
+.search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.form-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.form-row label {
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+}
+.form-row input,
+.form-row select {
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+}
+.form-row input:focus,
+.form-row select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.form-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path fill='%23666' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.half-row {
+  width: 48%;
+}
+.full-row {
+  width: 100%;
+  text-align: center;
+}
+.full-row button {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.full-row button:hover {
+  background: var(--color-focus);
+}
+
+@media (max-width: 500px) {
+  .half-row {
+    width: 100%;
+  }
+}
+
+/* Autocomplete */
+.autocomplete {
+  position: relative;
+}
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--color-bg);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  display: none;
+}
+.autocomplete-list.show {
+  display: block;
+}
+.autocomplete-list li {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+.autocomplete-list li:hover,
+.autocomplete-list li[aria-selected='true'] {
+  background: #f0f8ff;
+}
+
+/* Validation */
+.was-validated input:invalid,
+.was-validated select:invalid {
+  border-color: var(--color-error);
+}
+.error-message {
+  color: var(--color-error);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  display: none;
+}
+.error-message.active {
+  display: block;
+}
