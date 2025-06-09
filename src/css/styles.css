@@ -161,6 +161,16 @@ body {
   .half-row {
     width: 100%;
   }
+
+  .container {
+    /* formerly: height: 100vh; */
+    max-height: 100vh;
+    overflow-y: auto;
+
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1rem;
+  }
 }
 
 /* Autocomplete */
