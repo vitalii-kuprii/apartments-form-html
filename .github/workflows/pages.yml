@@ -1,5 +1,11 @@
 name: Deploy to GitHub Pages
 
+# Required permissions for GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 on:
   push:
     branches:
