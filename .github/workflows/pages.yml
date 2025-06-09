@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository using latest v4
+      # Checkout the repository using latest v41
       - uses: actions/checkout@v4
 
       # Prepare deployment directory
