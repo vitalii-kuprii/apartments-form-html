@@ -1,4 +1,4 @@
-import { Bot, Context, GrammyError, HttpError, session, InlineKeyboard, InputMediaPhoto } from 'grammy';
+import { Bot, Context, GrammyError, HttpError, session, InlineKeyboard, SessionFlavor } from 'grammy';
 import { conversations, createConversation, ConversationFlavor } from '@grammyjs/conversations';
 import { startCommand } from './commands/start.js';
 import { helpCommand } from './commands/help.js';
@@ -17,7 +17,7 @@ interface SessionData {
 }
 
 // Context type with session and conversation
-type MyContext = Context & ConversationFlavor;
+type MyContext = Context & SessionFlavor<SessionData> & ConversationFlavor<Context>;
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -36,7 +36,7 @@ bot.use(session({
 bot.use(conversations());
 
 // Register conversations
-bot.use(createConversation(searchWizard));
+bot.use(createConversation(searchWizard as any));
 
 // Register commands
 bot.command('start', startCommand);
@@ -231,7 +231,7 @@ bot.callbackQuery('my_searches', async (ctx) => {
       return;
     }
 
-    const searchList = searches.map((s, i) => {
+    const searchList = searches.map((s) => {
       const typeIcon = s.propertyType === 'rent' ? '🏠' : '🏡';
       const type = s.propertyType === 'rent' ? 'Оренда' : 'Купівля';
       const rooms = s.rooms.length > 0 ? s.rooms.join(', ') + ' кімн.' : 'будь-які';

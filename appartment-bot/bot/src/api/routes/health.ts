@@ -9,7 +9,7 @@ export async function healthRoutes(fastify: FastifyInstance) {
   });
 
   // Detailed health check with dependencies
-  fastify.get('/health/ready', async (request, reply) => {
+  fastify.get('/health/ready', async (_request, reply) => {
     const checks: Record<string, { status: string; latency?: number }> = {};
 
     // Check PostgreSQL

@@ -160,7 +160,7 @@ export class DomRiaClient {
     // Date filter - only fetch apartments published after this date
     // DOM.RIA expects YYYY-MM-DD format, not Unix timestamp
     if (params.dateFrom) {
-      const dateString = params.dateFrom.toISOString().split('T')[0];
+      const dateString = params.dateFrom.toISOString().split('T')[0] || '';
       queryParams.set('date_from', dateString);
     }
 
@@ -187,10 +187,10 @@ export class DomRiaClient {
       throw new Error(`DOM.RIA search failed: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as DomRiaSearchResult;
     console.log(`[DomRIA] Found ${data.count} apartments, returned ${data.items?.length || 0} IDs`);
 
-    return data as DomRiaSearchResult;
+    return data;
   }
 
   async getApartmentDetails(realtyId: number): Promise<DomRiaApartment> {

@@ -409,29 +409,35 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
         matchedSearches.set(created.id, matches);
 
         // Log matched apartment with full details
-        logger.fetcher.apartmentMatched(created.id, mappedApartment.externalId, matches, {
+        logger.fetcher.apartmentMatched(
+          {
+            apartmentId: created.id,
+            externalId: mappedApartment.externalId,
+            price: mappedApartment.price,
+            rooms: mappedApartment.rooms,
+            area: mappedApartment.area,
+            city: mappedApartment.city,
+          },
+          matches
+        );
+      }
+
+      // Log stored apartment
+      logger.fetcher.apartmentStored(
+        {
+          apartmentId: created.id,
+          externalId: mappedApartment.externalId,
           price: mappedApartment.price,
           rooms: mappedApartment.rooms,
           area: mappedApartment.area,
           city: mappedApartment.city,
-          district: mappedApartment.district,
-        });
-      }
-
-      // Log stored apartment
-      logger.fetcher.apartmentStored(created.id, mappedApartment.externalId, {
-        price: mappedApartment.price,
-        rooms: mappedApartment.rooms,
-        area: mappedApartment.area,
-        city: mappedApartment.city,
-        propertyType: group.propertyType,
-        apartmentType: group.apartmentType,
-      });
+        },
+        true
+      );
 
       metrics.apartmentsStored.inc({
         city: group.city,
-        property_type: group.propertyType,
-        apartment_type: group.apartmentType,
+        is_new: 'true',
       });
     }
 
@@ -444,7 +450,7 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
     });
 
   } catch (error) {
-    logger.fetcher.fetchGroupError(group.city, group.propertyType, group.apartmentType, error as Error);
+    logger.fetcher.fetchGroupError(group.city, error as Error);
     metrics.domriaRequests.inc({ endpoint: 'search', status: 'error' });
     metrics.errors.inc({ type: 'fetch_error', component: 'fetcher' });
   }

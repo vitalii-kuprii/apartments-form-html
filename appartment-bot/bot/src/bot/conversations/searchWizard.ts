@@ -1,5 +1,5 @@
 import { Conversation, ConversationFlavor } from '@grammyjs/conversations';
-import { Context, InlineKeyboard } from 'grammy';
+import { Context, InlineKeyboard, SessionFlavor } from 'grammy';
 import {
   SearchFormData,
   UKRAINIAN_CITIES,
@@ -13,7 +13,12 @@ import { PropertyType, ApartmentType } from '@prisma/client';
 import { logger } from '../../lib/logger.js';
 import * as metrics from '../../lib/metrics.js';
 
-export type SearchContext = Context & ConversationFlavor;
+// Session data interface (same as in bot/index.ts)
+interface SessionData {
+  // Add session data properties here as needed
+}
+
+export type SearchContext = Context & SessionFlavor<SessionData> & ConversationFlavor<Context>;
 export type SearchConversation = Conversation<SearchContext>;
 
 const CITIES_PER_PAGE = 8;
@@ -26,13 +31,15 @@ function getCityKeyboard(page: number): InlineKeyboard {
 
   // Add cities in 2 columns
   for (let i = 0; i < cities.length; i += 2) {
-    if (i + 1 < cities.length) {
+    const city1 = cities[i]!;
+    const city2 = cities[i + 1];
+    if (city2) {
       keyboard
-        .text(cities[i], `city:${cities[i]}`)
-        .text(cities[i + 1], `city:${cities[i + 1]}`)
+        .text(city1, `city:${city1}`)
+        .text(city2, `city:${city2}`)
         .row();
     } else {
-      keyboard.text(cities[i], `city:${cities[i]}`).row();
+      keyboard.text(city1, `city:${city1}`).row();
     }
   }
 
@@ -210,9 +217,9 @@ export async function searchWizard(
       logger.bot.info('wizard.cancelled', 'Search wizard cancelled', {
         user: userContext,
         search: {
-          currentStep,
           city: data.city || 'not_selected',
         },
+        step: currentStep,
       });
       await response.editMessageText('❌ Пошук скасовано.', { reply_markup: undefined });
       return;
@@ -220,14 +227,14 @@ export async function searchWizard(
 
     // Handle city page navigation
     if (callbackData.startsWith('city_page:')) {
-      cityPage = parseInt(callbackData.split(':')[1]);
+      cityPage = parseInt(callbackData.split(':')[1] || '0');
       await response.editMessageReplyMarkup({ reply_markup: getCityKeyboard(cityPage) });
       continue;
     }
 
     // Handle city selection
     if (callbackData.startsWith('city:')) {
-      data.city = callbackData.split(':')[1];
+      data.city = callbackData.split(':')[1] || '';
       currentStep = 'property';
       await response.editMessageText(
         `🏙 Місто: *${data.city}*\n\n🏠 *Оберіть тип оголошення:*`,
@@ -263,7 +270,7 @@ export async function searchWizard(
 
     // Handle price selection
     if (callbackData.startsWith('price:')) {
-      const priceValue = callbackData.split(':')[1];
+      const priceValue = callbackData.split(':')[1] || '';
 
       if (priceValue === 'skip') {
         data.price_min = 0;
@@ -296,8 +303,10 @@ export async function searchWizard(
       } else {
         const presets = data.property_type === 'rent' ? PRICE_PRESETS_RENT : PRICE_PRESETS_BUY;
         const preset = presets[parseInt(priceValue)];
-        data.price_min = preset.min;
-        data.price_max = preset.max;
+        if (preset) {
+          data.price_min = preset.min;
+          data.price_max = preset.max;
+        }
       }
 
       if (priceValue !== 'custom') {
@@ -312,7 +321,7 @@ export async function searchWizard(
 
     // Handle room toggle
     if (callbackData.startsWith('room:')) {
-      const room = parseInt(callbackData.split(':')[1]);
+      const room = parseInt(callbackData.split(':')[1] || '0');
       const index = data.rooms.indexOf(room);
       if (index > -1) {
         data.rooms.splice(index, 1);
@@ -393,7 +402,7 @@ export async function searchWizard(
 
         // Log successful search creation
         logger.bot.searchCreated(
-          { id: userId, username: userContext.username, firstName: userContext.firstName },
+          { userId, username: userContext.username, firstName: userContext.firstName },
           {
             searchId: search.id,
             city: data.city,
@@ -404,12 +413,14 @@ export async function searchWizard(
             rooms: data.rooms,
             withoutRealtors: data.without_realtors,
             petsFriendly: data.pets_friendly,
-          }
+          },
+          'wizard'
         );
-        metrics.searchesCreated.inc({
+        metrics.searchCreated.inc({
           city: data.city,
           property_type: data.property_type,
           apartment_type: data.apartment_type,
+          source: 'wizard',
         });
 
         await response.editMessageText(
@@ -428,7 +439,7 @@ export async function searchWizard(
             rooms: data.rooms,
           },
           error: {
-            message: (error as Error).message,
+            error: (error as Error).message,
             stack: (error as Error).stack,
           },
         });

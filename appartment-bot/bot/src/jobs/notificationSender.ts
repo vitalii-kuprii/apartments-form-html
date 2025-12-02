@@ -3,7 +3,7 @@
 
 import { prisma } from '../lib/prisma.js';
 import { bot } from '../bot/index.js';
-import { InlineKeyboard, InputMediaPhoto } from 'grammy';
+import { InlineKeyboard } from 'grammy';
 import { logger } from '../lib/logger.js';
 import * as metrics from '../lib/metrics.js';
 
@@ -17,22 +17,6 @@ function getRoomWord(count: number): string {
   if (count === 1) return 'кімната';
   if (count >= 2 && count <= 4) return 'кімнати';
   return 'кімнат';
-}
-
-// Relative date in Ukrainian
-function formatRelativeDate(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'сьогодні';
-  if (diffDays === 1) return 'вчора';
-  if (diffDays < 7) {
-    // Ukrainian plural forms for days
-    if (diffDays >= 2 && diffDays <= 4) return `${diffDays} дні тому`;
-    return `${diffDays} днів тому`;
-  }
-  return date.toLocaleDateString('uk-UA');
 }
 
 // Format apartment message for Telegram (wider horizontal layout)
@@ -195,7 +179,7 @@ async function sendApartmentNotification(
           user: { userId: userId.toString() },
           apartment: {
             apartmentId: apartment.id,
-            photoUrl: photos[0],
+            url: photos[0],
           },
           error: {
             error: (photoError as Error).message,
@@ -248,7 +232,8 @@ async function sendApartmentNotification(
         price: apartment.price,
         city: apartment.city,
       },
-      error as Error
+      error as Error,
+      [searchId]
     );
     metrics.notificationsSent.inc({ status: 'failed', city: apartment.city });
     metrics.errors.inc({ type: 'notification_error', component: 'notifier' });
@@ -276,7 +261,9 @@ export async function sendNotifications(
 ): Promise<{ sent: number; failed: number }> {
   const startTime = Date.now();
 
-  logger.notifier.notificationBatchStarted(matchedApartments.size);
+  logger.notifier.info('notification.batch_started', `Starting notification batch for ${matchedApartments.size} apartments`, {
+    count: matchedApartments.size,
+  });
 
   let sent = 0;
   let failed = 0;
@@ -366,7 +353,8 @@ export async function sendNotifications(
             price: apartment.price,
             city: apartment.city,
           },
-          { searchIds: userSearchIds }
+          { status: 'sent' },
+          userSearchIds
         );
         metrics.notificationsSent.inc({ status: 'success', city: apartment.city });
 
@@ -393,7 +381,7 @@ export async function sendNotifications(
   }
 
   const duration = Date.now() - startTime;
-  logger.notifier.notificationBatchCompleted(sent, failed, duration);
+  logger.notifier.notificationBatchComplete(sent, failed, duration);
   metrics.notificationDuration.observe(duration / 1000);
 
   return { sent, failed };

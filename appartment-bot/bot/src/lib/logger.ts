@@ -131,8 +131,8 @@ interface LokiPushRequest {
 }
 
 class LokiExporter {
-  private lokiUrl: string;
-  private authHeader: string;
+  private lokiUrl: string = '';
+  private authHeader: string = '';
   private logBuffer: Array<{ labels: Record<string, string>; timestamp: string; line: string }> = [];
   private flushInterval: ReturnType<typeof setInterval> | null = null;
   private isEnabled = false;
@@ -289,34 +289,6 @@ function serializeValue(value: unknown): unknown {
     return result;
   }
   return value;
-}
-
-// Flatten nested context for OTLP attributes (Loki works better with flat labels)
-function flattenContext(
-  obj: Record<string, unknown>,
-  prefix = ''
-): Record<string, string | number | boolean> {
-  const result: Record<string, string | number | boolean> = {};
-
-  for (const [key, value] of Object.entries(obj)) {
-    const newKey = prefix ? `${prefix}.${key}` : key;
-
-    if (value === null || value === undefined) {
-      continue;
-    }
-
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      result[newKey] = value;
-    } else if (Array.isArray(value)) {
-      // Convert arrays to comma-separated string
-      result[newKey] = value.map(v => String(v)).join(',');
-    } else if (typeof value === 'object') {
-      // Recursively flatten nested objects
-      Object.assign(result, flattenContext(value as Record<string, unknown>, newKey));
-    }
-  }
-
-  return result;
 }
 
 class Logger {

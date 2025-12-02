@@ -63,7 +63,6 @@ function getNextFetchDelayMs(): number {
       : (7 - hour);
     const msUntil7 = hoursUntil7 * 60 * 60 * 1000 - currentMinute * 60 * 1000;
 
-    const delayMinutes = Math.round(msUntil7 / 1000 / 60);
     logger.scheduler.cronScheduled(msUntil7, hour);
     metrics.cronNextRunDelay.set(msUntil7 / 1000);
     metrics.cronKyivHour.set(hour);
@@ -240,8 +239,6 @@ export async function runFetchCycle(force: boolean = false): Promise<FetchJobRes
       skipped: false,
     };
   } catch (error) {
-    const duration = Date.now() - startTime;
-
     logger.scheduler.cronJobFailed(jobContext, error as Error);
     metrics.cronJobRuns.inc({ job_name: 'fetch_cycle', status: 'failed', forced: String(force) });
     metrics.errors.inc({ type: 'cron_error', component: 'scheduler' });

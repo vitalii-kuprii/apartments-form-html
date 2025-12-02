@@ -72,7 +72,7 @@ server.get('/api/stats', async () => {
 });
 
 // Prometheus metrics endpoint for Grafana scraping
-server.get('/metrics', async (request, reply) => {
+server.get('/metrics', async (_request, reply) => {
   const metrics = await getMetrics();
   reply.header('Content-Type', getMetricsContentType());
   return metrics;
@@ -91,7 +91,7 @@ async function setupBullBoard() {
   serverAdapter.setBasePath('/admin/queues');
 
   createBullBoard({
-    queues: [new BullMQAdapter(queue)],
+    queues: [new BullMQAdapter(queue) as any],
     serverAdapter,
   });
 

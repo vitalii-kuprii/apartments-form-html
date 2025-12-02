@@ -24,10 +24,9 @@ export async function searchRoutes(fastify: FastifyInstance) {
   // Create new search
   fastify.post('/searches', {
     preHandler: [(fastify as any).authenticate],
-  }, async (request: any, reply) => {
+  }, async (request: any, _reply) => {
     const tgUser = request.telegramUser;
     const body = request.body as CreateSearchBody;
-    const startTime = Date.now();
 
     const userContext = {
       userId: tgUser.id,
@@ -74,8 +73,6 @@ export async function searchRoutes(fastify: FastifyInstance) {
           petsFriendly: body.petsFriendly || false,
         },
       });
-
-      const duration = Date.now() - startTime;
 
       // Log success
       logger.api.searchCreated(userContext, { ...searchContext, searchId: search.id }, 'api');

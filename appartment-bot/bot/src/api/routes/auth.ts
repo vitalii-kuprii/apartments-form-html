@@ -87,7 +87,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   // Update user preferences
   fastify.put('/user', {
     preHandler: [(fastify as any).authenticate],
-  }, async (request: any, reply) => {
+  }, async (request: any, _reply) => {
     const tgUser = request.telegramUser;
     const { notificationsEnabled } = request.body as { notificationsEnabled?: boolean };
 
