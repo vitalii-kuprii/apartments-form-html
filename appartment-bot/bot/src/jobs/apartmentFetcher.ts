@@ -285,7 +285,6 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
       rooms: roomsArray.length > 0 ? roomsArray : undefined,
       dateFrom: dateFrom,
       photosCountFrom: MIN_PHOTOS_COUNT,
-      limit: 100,
     });
 
     // Track API request
