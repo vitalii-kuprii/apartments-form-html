@@ -235,7 +235,7 @@ async function sendApartmentNotification(
       error as Error,
       [searchId]
     );
-    metrics.notificationsSent.inc({ status: 'failed', city: apartment.city });
+    metrics.notificationsSent.inc({ status: 'failed', city: apartment.city, has_photo: 'false' });
     metrics.errors.inc({ type: 'notification_error', component: 'notifier' });
 
     // Record failed notification
@@ -356,7 +356,7 @@ export async function sendNotifications(
           { status: 'sent' },
           userSearchIds
         );
-        metrics.notificationsSent.inc({ status: 'success', city: apartment.city });
+        metrics.notificationsSent.inc({ status: 'sent', city: apartment.city, has_photo: String(apartment.photos.length > 0) });
 
         // Mark as sent for all user's matching searches
         for (const searchId of userSearchIds.slice(1)) {

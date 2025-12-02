@@ -24,6 +24,9 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# Install OpenSSL 1.1 compatibility library required by Prisma
+RUN apk add --no-cache openssl1.1-compat
+
 # Install only production dependencies
 COPY package*.json ./
 COPY prisma ./prisma/
