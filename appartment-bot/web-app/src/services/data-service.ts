@@ -138,7 +138,7 @@ export class DataService {
     }
   }
 
-  async addFavorite(apartment: Omit<Apartment, 'id' | 'user_id' | 'created_at'>): Promise<Apartment | null> {
+  async addFavorite(_apartment: Omit<Apartment, 'id' | 'user_id' | 'created_at'>): Promise<Apartment | null> {
     // This method is kept for compatibility but might need apartment ID from our DB
     console.warn('addFavorite: This method requires an apartment ID from our database');
     return null;
