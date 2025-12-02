@@ -51,8 +51,6 @@ export interface DomRiaSearchParams {
   areaMax?: number;
   floorMin?: number;
   floorMax?: number;
-  page?: number;
-  limit?: number;
   dateFrom?: Date;          // Only fetch apartments published after this date
   photosCountFrom?: number; // Only fetch apartments with at least N photos
 }
@@ -124,37 +122,39 @@ export class DomRiaClient {
     queryParams.set('state_id', String(cityMapping.stateId));
     queryParams.set('city_id', String(cityMapping.cityId));
 
+    // Price filter - characteristic[235] for rent, characteristic[234] for buy
+    const priceCharId = params.propertyType === 'rent' ? '235' : '234';
     if (params.priceMin) {
-      queryParams.set('price_ot', String(params.priceMin));
+      queryParams.set(`characteristic[${priceCharId}][from]`, String(params.priceMin));
     }
     if (params.priceMax) {
-      queryParams.set('price_do', String(params.priceMax));
+      queryParams.set(`characteristic[${priceCharId}][to]`, String(params.priceMax));
     }
 
-    // Handle rooms - DOM.RIA uses characteristic_id for rooms
+    // Rooms filter - characteristic[209]
     if (params.rooms && params.rooms.length > 0) {
-      // For single room value, use rooms_count
-      // For multiple values, we'd need multiple requests or use characteristic filtering
       const minRooms = Math.min(...params.rooms);
       const maxRooms = Math.max(...params.rooms);
-      queryParams.set('rooms_count_ot', String(minRooms));
+      queryParams.set('characteristic[209][from]', String(minRooms));
       if (maxRooms < 4) {
-        queryParams.set('rooms_count_do', String(maxRooms));
+        queryParams.set('characteristic[209][to]', String(maxRooms));
       }
     }
 
+    // Area filter - characteristic[214]
     if (params.areaMin) {
-      queryParams.set('total_square_meters_ot', String(params.areaMin));
+      queryParams.set('characteristic[214][from]', String(params.areaMin));
     }
     if (params.areaMax) {
-      queryParams.set('total_square_meters_do', String(params.areaMax));
+      queryParams.set('characteristic[214][to]', String(params.areaMax));
     }
 
+    // Floor filter - characteristic[227]
     if (params.floorMin) {
-      queryParams.set('floor_from', String(params.floorMin));
+      queryParams.set('characteristic[227][from]', String(params.floorMin));
     }
     if (params.floorMax) {
-      queryParams.set('floor_to', String(params.floorMax));
+      queryParams.set('characteristic[227][to]', String(params.floorMax));
     }
 
     // Date filter - only fetch apartments published after this date
@@ -168,9 +168,6 @@ export class DomRiaClient {
     if (params.photosCountFrom) {
       queryParams.set('photos_count_from', String(params.photosCountFrom));
     }
-
-    queryParams.set('page', String(params.page || 0));
-    queryParams.set('limit', String(params.limit || 100));
 
     // Sort by newest first
     queryParams.set('sort', 'date_desc');
