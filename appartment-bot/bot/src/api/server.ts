@@ -25,6 +25,7 @@ server.register(cors, {
     /\.telegram\.org$/,
     /\.ngrok-free\.dev$/,
     /\.ngrok\.io$/,
+    /\.vercel\.app$/,
     'http://localhost:5173',
     'http://localhost:3000',
   ],
