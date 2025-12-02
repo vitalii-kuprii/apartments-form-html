@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Пошук квартир</title>
+    <meta property="og:image" content="https://bolt.new/static/og_default.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+  <body>
+    <div id="app">
+      <div class="top-bar">
+        <div class="app-logo">🏠</div>
+        <div class="selector-group">
+          <div class="selector">
+            <button class="selector-button" id="languageSelector">
+              <span id="currentLanguage">🇺🇦 UA</span>
+            </button>
+            <div class="selector-dropdown" id="languageDropdown">
+              <button class="selector-option" data-lang="uk">🇺🇦 Українська</button>
+              <button class="selector-option" data-lang="en">🇬🇧 English</button>
+            </div>
+          </div>
+
+          <div class="selector">
+            <button class="selector-button" id="currencySelector">
+              <span>💰</span>
+              <span id="currentCurrency">UAH</span>
+            </button>
+            <div class="selector-dropdown" id="currencyDropdown">
+              <button class="selector-option" data-currency="UAH">UAH (₴)</button>
+              <button class="selector-option" data-currency="USD">USD ($)</button>
+              <button class="selector-option" data-currency="EUR">EUR (€)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page active" data-route="/" id="searchFormPage"></div>
+      <div class="page" data-route="/searches" id="mySearchesPage"></div>
+      <div class="page" data-route="/favorites" id="favoritesPage"></div>
+
+      <nav class="bottom-nav">
+        <a href="#/" class="nav-item active">
+          <div class="nav-icon">🔍</div>
+          <div class="nav-label" data-i18n="search">Пошук</div>
+        </a>
+        <a href="#/searches" class="nav-item">
+          <div class="nav-icon">📋</div>
+          <div class="nav-label" data-i18n="mySearches">Мої пошуки</div>
+        </a>
+        <a href="#/favorites" class="nav-item">
+          <div class="nav-icon">⭐</div>
+          <div class="nav-label" data-i18n="favorites">Обрані</div>
+        </a>
+      </nav>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

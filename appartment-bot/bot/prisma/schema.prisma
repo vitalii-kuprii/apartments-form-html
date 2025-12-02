@@ -1,0 +1,167 @@
+// Prisma schema for Apartment Bot
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Telegram user
+model User {
+  id                BigInt    @id // Telegram user ID
+  username          String?
+  firstName         String?   @map("first_name")
+  lastName          String?   @map("last_name")
+  languageCode      String?   @map("language_code")
+  isBot             Boolean   @default(false) @map("is_bot")
+  isPremium         Boolean   @default(false) @map("is_premium")
+  notificationsEnabled Boolean @default(true) @map("notifications_enabled")
+  preferredMode     String    @default("ui") @map("preferred_mode") // "ui" or "native"
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  searches          Search[]
+  favorites         Favorite[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+// Property type enum
+enum PropertyType {
+  rent
+  buy
+}
+
+// Apartment type enum
+enum ApartmentType {
+  flat
+  house
+}
+
+// Saved search
+model Search {
+  id                String       @id @default(cuid())
+  userId            BigInt       @map("user_id")
+  name              String?      // Optional user-defined name
+  city              String
+  propertyType      PropertyType @map("property_type")
+  apartmentType     ApartmentType @map("apartment_type")
+  priceMin          Int?         @map("price_min")
+  priceMax          Int?         @map("price_max")
+  rooms             Int[]        // Array of room counts (1, 2, 3, 4+)
+  areaMin           Int?         @map("area_min")
+  areaMax           Int?         @map("area_max")
+  floorMin          Int?         @map("floor_min")
+  floorMax          Int?         @map("floor_max")
+  withoutRealtors   Boolean      @default(false) @map("without_realtors")
+  petsFriendly      Boolean      @default(false) @map("pets_friendly")
+  isActive          Boolean      @default(true) @map("is_active")
+  notifyEnabled     Boolean      @default(true) @map("notify_enabled")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sentApartments    SentApartment[]
+
+  @@index([userId])
+  @@index([city])
+  @@index([isActive])
+  @@map("searches")
+}
+
+// Apartment from DOM RIA
+model Apartment {
+  id                String       @id @default(cuid())
+  externalId        String       @unique @map("external_id") // DOM RIA ID
+  url               String
+  title             String
+  description       String?
+  city              String
+  district          String?
+  address           String?
+  propertyType      PropertyType @map("property_type")
+  apartmentType     ApartmentType @map("apartment_type")
+  price             Int
+  currency          String       @default("UAH")
+  rooms             Int?
+  area              Float?       // Square meters
+  floor             Int?
+  totalFloors       Int?         @map("total_floors")
+  photos            String[]     // Array of photo URLs
+  isFromRealtor     Boolean      @default(false) @map("is_from_realtor")
+  agencyName        String?      @map("agency_name")
+  commission        String?      // Commission info (e.g., "50%")
+  petsFriendly      Boolean      @default(false) @map("pets_friendly")
+  publishedAt       DateTime?    @map("published_at")
+  firstSeenAt       DateTime     @default(now()) @map("first_seen_at")
+  lastSeenAt        DateTime     @default(now()) @map("last_seen_at")
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  favorites         Favorite[]
+  sentTo            SentApartment[]
+  notifications     Notification[]
+
+  @@index([city])
+  @@index([propertyType])
+  @@index([price])
+  @@index([rooms])
+  @@index([isActive])
+  @@index([firstSeenAt])
+  @@map("apartments")
+}
+
+// User favorites
+model Favorite {
+  id                String     @id @default(cuid())
+  userId            BigInt     @map("user_id")
+  apartmentId       String     @map("apartment_id")
+  createdAt         DateTime   @default(now()) @map("created_at")
+
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apartment         Apartment  @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, apartmentId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+// Track which apartments were sent to which searches (prevent duplicates)
+model SentApartment {
+  id                String     @id @default(cuid())
+  searchId          String     @map("search_id")
+  apartmentId       String     @map("apartment_id")
+  sentAt            DateTime   @default(now()) @map("sent_at")
+
+  search            Search     @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  apartment         Apartment  @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+
+  @@unique([searchId, apartmentId])
+  @@index([searchId])
+  @@index([apartmentId])
+  @@map("sent_apartments")
+}
+
+// Notification history
+model Notification {
+  id                String     @id @default(cuid())
+  userId            BigInt     @map("user_id")
+  apartmentId       String     @map("apartment_id")
+  messageId         Int?       @map("message_id") // Telegram message ID
+  sentAt            DateTime   @default(now()) @map("sent_at")
+  status            String     @default("sent") // sent, failed, clicked
+
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apartment         Apartment  @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([apartmentId])
+  @@index([sentAt])
+  @@map("notifications")
+}
