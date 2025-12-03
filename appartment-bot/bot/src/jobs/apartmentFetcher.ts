@@ -12,7 +12,7 @@ import * as metrics from '../lib/metrics.js';
 // Minimum photos required (skip listings with fewer photos)
 const MIN_PHOTOS_COUNT = 3;
 
-interface SearchGroup {
+export interface SearchGroup {
   city: string;
   propertyType: PropertyType;
   apartmentType: ApartmentType;

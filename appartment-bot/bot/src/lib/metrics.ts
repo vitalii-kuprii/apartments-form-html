@@ -230,6 +230,58 @@ export const queueJobs = new client.Gauge({
 });
 
 // ============================================
+// Parallel Processing Metrics
+// ============================================
+
+export const parallelJobsActive = new client.Gauge({
+  name: 'bot_parallel_jobs_active',
+  help: 'Number of city fetch jobs currently running in parallel',
+});
+
+export const cityJobDuration = new client.Histogram({
+  name: 'bot_city_job_duration_seconds',
+  help: 'Duration of individual city fetch jobs',
+  labelNames: ['city', 'property_type', 'status'] as const,
+  buckets: [1, 5, 10, 30, 60, 120],
+});
+
+export const cycleCompletionTime = new client.Histogram({
+  name: 'bot_cycle_completion_seconds',
+  help: 'Time from cycle start to all cities complete',
+  buckets: [10, 30, 60, 120, 300, 600],
+});
+
+// ============================================
+// Notification Queue Metrics
+// ============================================
+
+export const notificationQueueJobs = new client.Gauge({
+  name: 'bot_notification_queue_jobs',
+  help: 'Current notification queue job counts',
+  labelNames: ['status'] as const, // waiting, active, completed, failed
+});
+
+export const notificationsQueued = new client.Counter({
+  name: 'bot_notifications_queued_total',
+  help: 'Total notifications added to queue',
+  labelNames: ['city'] as const,
+});
+
+// ============================================
+// Circuit Breaker Metrics
+// ============================================
+
+export const circuitBreakerState = new client.Gauge({
+  name: 'bot_circuit_breaker_state',
+  help: 'Circuit breaker state (0=closed, 1=open)',
+});
+
+export const circuitBreakerErrors = new client.Counter({
+  name: 'bot_circuit_breaker_errors_total',
+  help: 'API errors recorded by circuit breaker',
+});
+
+// ============================================
 // Helpers
 // ============================================
 

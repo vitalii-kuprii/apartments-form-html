@@ -69,7 +69,7 @@ bot.command('fetch', async (ctx) => {
 
     const message = result.skipped
       ? `Fetch skipped: ${result.skipReason}`
-      : `Fetch complete:\n- New apartments: ${result.newApartments}\n- Notifications sent: ${result.notificationsSent}\n- Failed: ${result.notificationsFailed}`;
+      : `Fetch cycle started!\nResults will be available when cycle completes.`;
 
     await ctx.reply(message);
   } catch (error) {
@@ -109,12 +109,26 @@ bot.command('stats', async (ctx) => {
         '*Queue Stats:*',
         `Kyiv hour: ${queueStats.kyivHour}:00`,
         `Next fetch: ${queueStats.nextFetchIn}`,
-        `Waiting: ${queueStats.waiting}`,
-        `Active: ${queueStats.active}`,
-        `Completed: ${queueStats.completed}`,
-        `Failed: ${queueStats.failed}`,
-        `Delayed: ${queueStats.delayed}`,
+        `Concurrency: ${queueStats.concurrency}`,
+        '',
+        '*Fetch Queue:*',
+        `Waiting: ${queueStats.fetch.waiting}`,
+        `Active: ${queueStats.fetch.active}`,
+        `Completed: ${queueStats.fetch.completed}`,
+        `Failed: ${queueStats.fetch.failed}`,
+        `Delayed: ${queueStats.fetch.delayed}`,
       );
+
+      if (queueStats.notifications) {
+        lines.push(
+          '',
+          '*Notification Queue:*',
+          `Waiting: ${queueStats.notifications.waiting}`,
+          `Active: ${queueStats.notifications.active}`,
+          `Completed: ${queueStats.notifications.completed}`,
+          `Failed: ${queueStats.notifications.failed}`,
+        );
+      }
     }
 
     await ctx.reply(lines.join('\n'), { parse_mode: 'Markdown' });

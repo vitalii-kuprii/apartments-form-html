@@ -1,6 +1,9 @@
 // DOM.RIA API Client Service
 // https://developers.ria.com/
 
+import { checkCircuit, recordError, recordSuccess } from '../lib/circuitBreaker.js';
+import * as metrics from '../lib/metrics.js';
+
 const API_BASE_URL = 'https://developers.ria.com/dom';
 const PHOTO_BASE_URL = 'https://cdn.riastatic.com/photos';
 
@@ -176,29 +179,59 @@ export class DomRiaClient {
   }
 
   async search(params: DomRiaSearchParams): Promise<DomRiaSearchResult> {
+    // Check circuit breaker before making request
+    await checkCircuit();
+
     const url = this.buildSearchUrl(params);
     console.log(`[DomRIA] Search: ${url.replace(this.apiKey, '***')}`);
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`DOM.RIA search failed: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        await recordError(`HTTP ${response.status}: ${response.statusText}`);
+        metrics.circuitBreakerErrors.inc();
+        throw new Error(`DOM.RIA search failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as DomRiaSearchResult;
+      console.log(`[DomRIA] Found ${data.count} apartments, returned ${data.items?.length || 0} IDs`);
+
+      await recordSuccess();
+      return data;
+    } catch (error) {
+      if ((error as Error).message.includes('Circuit breaker')) {
+        throw error; // Re-throw circuit breaker errors
+      }
+      await recordError((error as Error).message);
+      metrics.circuitBreakerErrors.inc();
+      throw error;
     }
-
-    const data = await response.json() as DomRiaSearchResult;
-    console.log(`[DomRIA] Found ${data.count} apartments, returned ${data.items?.length || 0} IDs`);
-
-    return data;
   }
 
   async getApartmentDetails(realtyId: number): Promise<DomRiaApartment> {
+    // Check circuit breaker before making request
+    await checkCircuit();
+
     const url = `${API_BASE_URL}/info/${realtyId}?api_key=${this.apiKey}`;
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`DOM.RIA info failed: ${response.status} ${response.statusText}`);
-    }
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        await recordError(`HTTP ${response.status}: ${response.statusText}`);
+        metrics.circuitBreakerErrors.inc();
+        throw new Error(`DOM.RIA info failed: ${response.status} ${response.statusText}`);
+      }
 
-    return response.json() as Promise<DomRiaApartment>;
+      await recordSuccess();
+      return response.json() as Promise<DomRiaApartment>;
+    } catch (error) {
+      if ((error as Error).message.includes('Circuit breaker')) {
+        throw error;
+      }
+      await recordError((error as Error).message);
+      metrics.circuitBreakerErrors.inc();
+      throw error;
+    }
   }
 
   async getApartmentsBatch(realtyIds: number[], batchSize = 10): Promise<DomRiaApartment[]> {
