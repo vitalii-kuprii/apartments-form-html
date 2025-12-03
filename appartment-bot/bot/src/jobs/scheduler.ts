@@ -32,11 +32,32 @@ interface CycleStartJobData {
   force?: boolean;
 }
 
+// Serialized version of SearchGroup for BullMQ (BigInt converted to string)
+interface SerializedSearchGroup {
+  city: string;
+  propertyType: 'rent' | 'buy';
+  apartmentType: 'flat' | 'house';
+  searches: {
+    id: string;
+    userId: string; // Serialized from bigint
+    priceMin: number | null;
+    priceMax: number | null;
+    rooms: number[];
+    areaMin: number | null;
+    areaMax: number | null;
+    floorMin: number | null;
+    floorMax: number | null;
+    withoutRealtors: boolean;
+    petsFriendly: boolean;
+    notifyEnabled: boolean;
+  }[];
+}
+
 interface CityFetchJobData {
   type: 'city-fetch';
   cycleId: string;
   groupKey: string;
-  group: SearchGroup;
+  group: SerializedSearchGroup;
 }
 
 interface CycleCompleteJobData {
@@ -287,13 +308,22 @@ async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
   for (const group of groups) {
     const groupKey = `${group.city}-${group.propertyType}-${group.apartmentType}`;
 
+    // Serialize group to handle BigInt (userId) - JSON.stringify can't handle BigInt
+    const serializedGroup = {
+      ...group,
+      searches: group.searches.map(s => ({
+        ...s,
+        userId: s.userId.toString(),
+      })),
+    };
+
     await fetchQueue?.add(
       'city-fetch',
       {
         type: 'city-fetch',
         cycleId,
         groupKey,
-        group,
+        group: serializedGroup,
       } as CityFetchJobData,
       {
         jobId: `${cycleId}-${groupKey}`,
@@ -309,9 +339,18 @@ async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
 
 // Process city-fetch job: fetches apartments for one city
 async function processCityFetch(job: Job<CityFetchJobData>): Promise<void> {
-  const { cycleId, groupKey, group } = job.data;
+  const { cycleId, groupKey, group: serializedGroup } = job.data;
   const keys = getCycleKeys(cycleId);
   const startTime = Date.now();
+
+  // Deserialize group: convert userId back from string to bigint
+  const group: SearchGroup = {
+    ...serializedGroup,
+    searches: serializedGroup.searches.map(s => ({
+      ...s,
+      userId: BigInt(s.userId),
+    })),
+  };
 
   logger.scheduler.info('city.fetch_started', `Fetching ${groupKey}`, {
     cycleId,
