@@ -158,6 +158,14 @@ export async function resetDailyStats(): Promise<void> {
   await redis.hset(API_STATS_KEY, 'lastReset', Date.now().toString());
 }
 
+// Per-city stats
+export interface CityStats {
+  found: number;        // API returned this many
+  storedToDb: number;   // New apartments saved
+  matched: number;      // Matched user searches
+  notificationsSent: number;
+}
+
 // Job result interface
 export interface FetchJobResult {
   newApartments: number;
@@ -165,6 +173,7 @@ export interface FetchJobResult {
   notificationsFailed: number;
   skipped: boolean;
   skipReason?: string;
+  cityStats: Record<string, CityStats>;  // Per-city breakdown
 }
 
 // Run the full fetch and notify cycle
@@ -192,6 +201,7 @@ export async function runFetchCycle(force: boolean = false): Promise<FetchJobRes
       notificationsFailed: 0,
       skipped: true,
       skipReason,
+      cityStats: {},
     };
   }
 
@@ -205,7 +215,7 @@ export async function runFetchCycle(force: boolean = false): Promise<FetchJobRes
 
   try {
     // Step 1: Fetch new apartments
-    const { totalNew, matchedApartments } = await runApartmentFetcher();
+    const { totalNew, matchedApartments, cityStats: fetchCityStats } = await runApartmentFetcher();
 
     // Step 2: Send notifications for matched apartments
     let notificationsSent = 0;
@@ -219,12 +229,24 @@ export async function runFetchCycle(force: boolean = false): Promise<FetchJobRes
 
     const duration = Date.now() - startTime;
 
+    // Build final cityStats with notification counts
+    const cityStats: Record<string, CityStats> = {};
+    for (const [city, stats] of Object.entries(fetchCityStats)) {
+      cityStats[city] = {
+        found: stats.found,
+        storedToDb: stats.storedToDb,
+        matched: stats.matched,
+        notificationsSent: 0, // Will be populated if we track per-city notifications
+      };
+    }
+
     // Log job completion with full results
     logger.scheduler.cronJobCompleted(jobContext, {
       newApartments: totalNew,
       matchedCount: matchedApartments.size,
       notificationsSent,
       notificationsFailed,
+      cityStats,
     }, duration);
 
     // Track metrics
@@ -237,6 +259,7 @@ export async function runFetchCycle(force: boolean = false): Promise<FetchJobRes
       notificationsSent,
       notificationsFailed,
       skipped: false,
+      cityStats,
     };
   } catch (error) {
     logger.scheduler.cronJobFailed(jobContext, error as Error);
@@ -248,6 +271,7 @@ export async function runFetchCycle(force: boolean = false): Promise<FetchJobRes
       notificationsSent: 0,
       notificationsFailed: 0,
       skipped: false,
+      cityStats: {},
     };
   }
 }
@@ -330,6 +354,7 @@ export async function startScheduler(): Promise<void> {
         notificationsFailed: result.notificationsFailed,
         skipped: result.skipped,
         skipReason: result.skipReason,
+        cityStats: result.cityStats,
       },
     });
 
@@ -352,9 +377,6 @@ export async function startScheduler(): Promise<void> {
     metrics.errors.inc({ type: 'queue_error', component: 'scheduler' });
     updateQueueMetrics();
   });
-
-  // Clean up ALL old jobs (drain only removes waiting, not delayed)
-  await fetchQueue.obliterate({ force: true });
 
   // Check if we should run now or wait
   const kyivHour = getKyivHour();

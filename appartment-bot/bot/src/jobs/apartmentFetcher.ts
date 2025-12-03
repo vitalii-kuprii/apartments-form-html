@@ -235,10 +235,12 @@ async function groupSearches(): Promise<SearchGroup[]> {
 async function fetchGroupApartments(group: SearchGroup): Promise<{
   newApartments: Array<{ id: string; apartment: ReturnType<typeof mapDomRiaApartment> }>;
   matchedSearches: Map<string, string[]>; // apartmentId -> searchIds[]
+  apiFound: number; // How many apartments API returned
 }> {
   const client = getDomRiaClient();
   const newApartments: Array<{ id: string; apartment: ReturnType<typeof mapDomRiaApartment> }> = [];
   const matchedSearches = new Map<string, string[]>();
+  let apiFound = 0;
 
   try {
     // Calculate combined search params (use widest range)
@@ -303,10 +305,12 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
         propertyType: group.propertyType,
         apartmentType: group.apartmentType,
       });
-      return { newApartments, matchedSearches };
+      return { newApartments, matchedSearches, apiFound: 0 };
     }
 
-    logger.fetcher.info('fetch.search_results', `Found ${searchResult.count} total, fetching ${searchResult.items.length}`, {
+    apiFound = searchResult.items.length;
+
+    logger.fetcher.info('fetch.search_results', `Found ${searchResult.count} total, fetching ${apiFound}`, {
       city: group.city,
       totalCount: searchResult.count,
       itemsToFetch: searchResult.items.length,
@@ -364,7 +368,7 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
         }
       }
 
-      return { newApartments, matchedSearches };
+      return { newApartments, matchedSearches, apiFound };
     }
 
     logger.fetcher.info('fetch.fetching_details', `Fetching details for new apartments`, {
@@ -454,13 +458,21 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
     metrics.errors.inc({ type: 'fetch_error', component: 'fetcher' });
   }
 
-  return { newApartments, matchedSearches };
+  return { newApartments, matchedSearches, apiFound };
+}
+
+// Per-city stats type
+export interface CityFetchStats {
+  found: number;
+  storedToDb: number;
+  matched: number;
 }
 
 // Main fetcher function
 export async function runApartmentFetcher(): Promise<{
   totalNew: number;
   matchedApartments: Map<string, string[]>; // apartmentId -> searchIds that match
+  cityStats: Record<string, CityFetchStats>; // Per-city breakdown
 }> {
   const startTime = Date.now();
 
@@ -468,6 +480,7 @@ export async function runApartmentFetcher(): Promise<{
 
   let totalNew = 0;
   const allMatchedApartments = new Map<string, string[]>();
+  const cityStats: Record<string, CityFetchStats> = {};
 
   try {
     // Group searches for efficient API usage
@@ -492,10 +505,19 @@ export async function runApartmentFetcher(): Promise<{
         }
       );
 
-      const { newApartments, matchedSearches } = await fetchGroupApartments(group);
+      const { newApartments, matchedSearches, apiFound } = await fetchGroupApartments(group);
       totalNew += newApartments.length;
 
       const groupDuration = Date.now() - groupStartTime;
+
+      // Update city stats
+      const cityKey = group.city;
+      if (!cityStats[cityKey]) {
+        cityStats[cityKey] = { found: 0, storedToDb: 0, matched: 0 };
+      }
+      cityStats[cityKey].found += apiFound;
+      cityStats[cityKey].storedToDb += newApartments.length;
+      cityStats[cityKey].matched += matchedSearches.size;
 
       // Merge matched searches
       for (const [apartmentId, searchIds] of matchedSearches) {
@@ -540,7 +562,7 @@ export async function runApartmentFetcher(): Promise<{
     metrics.errors.inc({ type: 'fetch_error', component: 'fetcher' });
   }
 
-  return { totalNew, matchedApartments: allMatchedApartments };
+  return { totalNew, matchedApartments: allMatchedApartments, cityStats };
 }
 
 // Export for use in scheduler
