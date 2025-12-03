@@ -9,7 +9,7 @@ import { authRoutes } from './routes/auth.js';
 import { searchRoutes } from './routes/searches.js';
 import { apartmentRoutes } from './routes/apartments.js';
 import { favoriteRoutes } from './routes/favorites.js';
-import { getQueueStats, getApiStats, getAllCityTimestamps, getFetchQueue } from '../jobs/scheduler.js';
+import { getQueueStats, getApiStats, getAllCityTimestamps, getFetchQueue, getNotificationQueue } from '../jobs/scheduler.js';
 import { getMetrics, getMetricsContentType } from '../lib/metrics.js';
 
 const server = Fastify({
@@ -81,9 +81,10 @@ server.get('/metrics', async (_request, reply) => {
 
 // Bull Board visual dashboard for BullMQ job monitoring
 async function setupBullBoard() {
-  const queue = getFetchQueue();
+  const fetchQueue = getFetchQueue();
+  const notificationQueue = getNotificationQueue();
 
-  if (!queue) {
+  if (!fetchQueue) {
     console.log('[BullBoard] Queue not available yet. Dashboard will not be mounted.');
     return;
   }
@@ -91,8 +92,14 @@ async function setupBullBoard() {
   const serverAdapter = new FastifyAdapter();
   serverAdapter.setBasePath('/admin/queues');
 
+  // Register both queues with Bull Board
+  const queues = [new BullMQAdapter(fetchQueue) as any];
+  if (notificationQueue) {
+    queues.push(new BullMQAdapter(notificationQueue) as any);
+  }
+
   createBullBoard({
-    queues: [new BullMQAdapter(queue) as any],
+    queues,
     serverAdapter,
   });
 
