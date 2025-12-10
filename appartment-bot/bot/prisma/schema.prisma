@@ -53,6 +53,7 @@ model Search {
   apartmentType     ApartmentType @map("apartment_type")
   priceMin          Int?         @map("price_min")
   priceMax          Int?         @map("price_max")
+  currency          String       @default("UAH") // USD, EUR, UAH
   rooms             Int[]        // Array of room counts (1, 2, 3, 4+)
   areaMin           Int?         @map("area_min")
   areaMax           Int?         @map("area_max")
@@ -86,8 +87,11 @@ model Apartment {
   address           String?
   propertyType      PropertyType @map("property_type")
   apartmentType     ApartmentType @map("apartment_type")
-  price             Int
-  currency          String       @default("UAH")
+  price             Int          // Original price in original currency
+  priceUsd          Int?         @map("price_usd")
+  priceEur          Int?         @map("price_eur")
+  priceUah          Int?         @map("price_uah")
+  currency          String       @default("UAH") // Original listing currency
   rooms             Int?
   area              Float?       // Square meters
   floor             Int?

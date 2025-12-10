@@ -12,6 +12,13 @@ import * as metrics from '../lib/metrics.js';
 // Minimum photos required (skip listings with fewer photos)
 const MIN_PHOTOS_COUNT = 3;
 
+// Parse price from formatted string "35 000" -> 35000
+function parsePrice(priceStr?: string): number | null {
+  if (!priceStr) return null;
+  const parsed = parseInt(priceStr.replace(/\s/g, ''), 10);
+  return isNaN(parsed) ? null : parsed;
+}
+
 export interface SearchGroup {
   city: string;
   propertyType: PropertyType;
@@ -21,6 +28,7 @@ export interface SearchGroup {
     userId: bigint;
     priceMin: number | null;
     priceMax: number | null;
+    currency: string; // USD, EUR, UAH
     rooms: number[];
     areaMin: number | null;
     areaMax: number | null;
@@ -86,6 +94,11 @@ function mapDomRiaApartment(
   const areaPart = apartment.total_square_meters ? `, ${apartment.total_square_meters} м²` : '';
   const title = `${roomsPart}${typePart}${areaPart}`;
 
+  // Parse all 3 prices from priceArr
+  const priceUsd = parsePrice(apartment.priceArr?.['1']);
+  const priceEur = parsePrice(apartment.priceArr?.['2']);
+  const priceUah = parsePrice(apartment.priceArr?.['3']);
+
   return {
     externalId: String(apartment.realty_id),
     url: client.getApartmentUrl(apartment.beautiful_url),
@@ -102,6 +115,9 @@ function mapDomRiaApartment(
     propertyType,
     apartmentType,
     price: apartment.price || apartment.price_total || 0,
+    priceUsd,
+    priceEur,
+    priceUah,
     currency: apartment.currency_type || 'UAH',
     rooms: apartment.rooms_count || null,
     area: apartment.total_square_meters || null,
@@ -116,10 +132,26 @@ function mapDomRiaApartment(
   };
 }
 
+// Get apartment price in the specified currency
+function getApartmentPrice(
+  apartment: { price: number; priceUsd?: number | null; priceEur?: number | null; priceUah?: number | null },
+  currency: string
+): number | null {
+  switch (currency) {
+    case 'USD': return apartment.priceUsd ?? null;
+    case 'EUR': return apartment.priceEur ?? null;
+    case 'UAH': return apartment.priceUah ?? null;
+    default: return apartment.priceUah ?? apartment.price;
+  }
+}
+
 // Check if apartment matches search criteria
 function apartmentMatchesSearch(
   apartment: {
     price: number;
+    priceUsd?: number | null;
+    priceEur?: number | null;
+    priceUah?: number | null;
     rooms: number | null;
     area: number | null;
     floor: number | null;
@@ -128,6 +160,7 @@ function apartmentMatchesSearch(
   search: {
     priceMin: number | null;
     priceMax: number | null;
+    currency: string;
     rooms: number[];
     areaMin: number | null;
     areaMax: number | null;
@@ -136,9 +169,13 @@ function apartmentMatchesSearch(
     withoutRealtors: boolean;
   }
 ): boolean {
-  // Check price
-  if (search.priceMin && apartment.price < search.priceMin) return false;
-  if (search.priceMax && apartment.price > search.priceMax) return false;
+  // Get price in search's currency
+  const price = getApartmentPrice(apartment, search.currency || 'UAH');
+
+  // Check price (skip if price not available in this currency)
+  if (price === null) return false;
+  if (search.priceMin && price < search.priceMin) return false;
+  if (search.priceMax && price > search.priceMax) return false;
 
   // Check rooms
   if (search.rooms.length > 0 && apartment.rooms !== null) {
@@ -177,6 +214,7 @@ async function groupSearches(): Promise<SearchGroup[]> {
       apartmentType: true,
       priceMin: true,
       priceMax: true,
+      currency: true,
       rooms: true,
       areaMin: true,
       areaMax: true,
@@ -217,6 +255,7 @@ async function groupSearches(): Promise<SearchGroup[]> {
       userId: search.userId,
       priceMin: search.priceMin,
       priceMax: search.priceMax,
+      currency: search.currency,
       rooms: search.rooms,
       areaMin: search.areaMin,
       areaMax: search.areaMax,

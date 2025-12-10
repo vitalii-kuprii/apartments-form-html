@@ -76,6 +76,12 @@ export interface DomRiaApartment {
   price: number;
   price_total: number;
   currency_type: string;
+  currency_type_id: number; // 1=USD, 2=EUR, 3=UAH
+  priceArr?: {
+    '1'?: string; // USD (formatted like "35 000")
+    '2'?: string; // EUR
+    '3'?: string; // UAH
+  };
   rooms_count: number;
   total_square_meters: number;
   living_square_meters: number;
@@ -174,6 +180,9 @@ export class DomRiaClient {
 
     // Sort by newest first
     queryParams.set('sort', 'date_desc');
+
+    // Filter out duplicates from DOM.RIA
+    queryParams.set('wo_dupl', '1');
 
     return `${API_BASE_URL}/search?${queryParams.toString()}`;
   }

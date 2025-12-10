@@ -42,6 +42,7 @@ interface SerializedSearchGroup {
     userId: string; // Serialized from bigint
     priceMin: number | null;
     priceMax: number | null;
+    currency: string;
     rooms: number[];
     areaMin: number | null;
     areaMax: number | null;
