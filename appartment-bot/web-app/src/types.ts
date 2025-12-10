@@ -23,6 +23,7 @@ export interface SearchFormData {
   property_type: 'rent' | 'buy';
   price_min: number;
   price_max: number | null;
+  currency: 'UAH' | 'USD' | 'EUR';
   rooms: number[];
   area_min: number;
   area_max: number | null;

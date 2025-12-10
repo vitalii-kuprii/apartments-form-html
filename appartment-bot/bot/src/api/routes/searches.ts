@@ -11,6 +11,7 @@ interface CreateSearchBody {
   apartmentType: 'flat' | 'house';
   priceMin?: number;
   priceMax?: number;
+  currency?: 'UAH' | 'USD' | 'EUR';
   rooms?: number[];
   areaMin?: number;
   areaMax?: number;
@@ -64,6 +65,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
           apartmentType: body.apartmentType as ApartmentType,
           priceMin: body.priceMin,
           priceMax: body.priceMax,
+          currency: body.currency || 'UAH',
           rooms: body.rooms || [],
           areaMin: body.areaMin,
           areaMax: body.areaMax,
@@ -94,6 +96,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
         apartmentType: search.apartmentType,
         priceMin: search.priceMin,
         priceMax: search.priceMax,
+        currency: search.currency,
         rooms: search.rooms,
         areaMin: search.areaMin,
         areaMax: search.areaMax,
@@ -132,6 +135,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
       apartmentType: s.apartmentType,
       priceMin: s.priceMin,
       priceMax: s.priceMax,
+      currency: s.currency,
       rooms: s.rooms,
       areaMin: s.areaMin,
       areaMax: s.areaMax,
@@ -171,6 +175,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
       apartmentType: search.apartmentType,
       priceMin: search.priceMin,
       priceMax: search.priceMax,
+      currency: search.currency,
       rooms: search.rooms,
       areaMin: search.areaMin,
       areaMax: search.areaMax,
@@ -213,6 +218,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
         apartmentType: body.apartmentType as ApartmentType | undefined,
         priceMin: body.priceMin,
         priceMax: body.priceMax,
+        currency: body.currency,
         rooms: body.rooms,
         areaMin: body.areaMin,
         areaMax: body.areaMax,
@@ -233,6 +239,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
       apartmentType: search.apartmentType,
       priceMin: search.priceMin,
       priceMax: search.priceMax,
+      currency: search.currency,
       rooms: search.rooms,
       areaMin: search.areaMin,
       areaMax: search.areaMax,

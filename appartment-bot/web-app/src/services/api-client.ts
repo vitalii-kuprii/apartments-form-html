@@ -104,6 +104,7 @@ export interface CreateSearchData {
   apartmentType: 'flat' | 'house';
   priceMin?: number;
   priceMax?: number;
+  currency: 'UAH' | 'USD' | 'EUR';
   rooms?: number[];
   areaMin?: number;
   areaMax?: number;

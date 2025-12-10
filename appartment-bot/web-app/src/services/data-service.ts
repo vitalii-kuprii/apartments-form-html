@@ -32,6 +32,7 @@ function mapFormDataToApiData(formData: SearchFormData): api.CreateSearchData {
     apartmentType: formData.apartment_type,
     priceMin: formData.price_min || undefined,
     priceMax: formData.price_max || undefined,
+    currency: formData.currency,
     rooms: formData.rooms.length > 0 ? formData.rooms : undefined,
     areaMin: formData.area_min || undefined,
     areaMax: formData.area_max || undefined,
