@@ -266,7 +266,10 @@ async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
 
     // Schedule next cycle
     const delay = getNextFetchDelayMs();
-    await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, { delay });
+    await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
+      delay,
+      jobId: 'next-cycle', // Prevents duplicate scheduling on deploy
+    });
     return;
   }
 
@@ -290,7 +293,10 @@ async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
 
     // Schedule next cycle
     const delay = getNextFetchDelayMs();
-    await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, { delay });
+    await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
+      delay,
+      jobId: 'next-cycle', // Prevents duplicate scheduling on deploy
+    });
     return;
   }
 
@@ -536,7 +542,10 @@ async function processCycleComplete(job: Job<CycleCompleteJobData>): Promise<Fet
 
   // Schedule next cycle
   const delay = getNextFetchDelayMs();
-  await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, { delay });
+  await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
+    delay,
+    jobId: 'next-cycle', // Prevents duplicate scheduling on deploy
+  });
 
   logger.scheduler.info('cycle.next_scheduled', `Next cycle scheduled in ${Math.round(delay / 1000 / 60)} minutes`, {
     delay,
@@ -779,7 +788,10 @@ export async function startScheduler(): Promise<void> {
   const kyivHour = getKyivHour();
   if (shouldSkipFetch()) {
     const delay = getNextFetchDelayMs();
-    await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, { delay });
+    await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
+      delay,
+      jobId: 'next-cycle', // Prevents duplicate scheduling on deploy
+    });
 
     logger.scheduler.info('scheduler.started', 'Scheduler started - night time, first cycle scheduled', {
       kyivHour,
@@ -787,7 +799,9 @@ export async function startScheduler(): Promise<void> {
       firstCycleDelayMinutes: Math.round(delay / 1000 / 60),
     });
   } else {
-    await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData);
+    await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
+      jobId: 'next-cycle', // Prevents duplicate scheduling on deploy
+    });
 
     logger.scheduler.info('scheduler.started', 'Scheduler started - day time, first cycle started', {
       kyivHour,
