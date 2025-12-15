@@ -639,6 +639,7 @@ async function queueNotificationsForMatches(
           apartment,
         } as NotificationJobData,
         {
+          jobId: `notify-${apartmentId}-${chatId}`, // Prevent duplicate jobs
           attempts: 3,
           backoff: {
             type: 'exponential',
@@ -804,6 +805,23 @@ async function processNotificationJob(job: Job<NotificationJobData>): Promise<vo
   const { sendApartmentNotification } = await import('./notificationSender.js');
   const { prisma } = await import('../lib/prisma.js');
 
+  // Check if already sent BEFORE sending (handles race conditions and retries)
+  const alreadySent = await prisma.sentApartment.findFirst({
+    where: {
+      apartmentId,
+      searchId: { in: searchIds },
+    },
+  });
+
+  if (alreadySent) {
+    logger.notifier.info('notification.skipped_duplicate', `Skipping duplicate notification`, {
+      apartmentId,
+      chatId,
+      searchIds,
+    });
+    return; // Skip silently - already sent
+  }
+
   const success = await sendApartmentNotification(
     BigInt(chatId),
     apartment,
@@ -811,14 +829,18 @@ async function processNotificationJob(job: Job<NotificationJobData>): Promise<vo
   );
 
   if (success) {
-    // Mark as sent for all matching searches
+    // Mark as sent for all matching searches (use upsert to handle race conditions)
     for (const searchId of searchIds.slice(1)) {
       try {
-        await prisma.sentApartment.create({
-          data: { searchId, apartmentId },
+        await prisma.sentApartment.upsert({
+          where: {
+            searchId_apartmentId: { searchId, apartmentId },
+          },
+          create: { searchId, apartmentId },
+          update: {}, // Do nothing if already exists
         });
       } catch {
-        // Ignore duplicates
+        // Ignore errors
       }
     }
 

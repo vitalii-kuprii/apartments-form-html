@@ -214,12 +214,17 @@ async function sendApartmentNotification(
     });
 
     // Record sent apartment for this search (skip for test notifications)
+    // Use upsert to handle race conditions where job might be retried
     if (searchId && searchId !== 'test-search') {
-      await prisma.sentApartment.create({
-        data: {
+      await prisma.sentApartment.upsert({
+        where: {
+          searchId_apartmentId: { searchId, apartmentId: apartment.id },
+        },
+        create: {
           searchId,
           apartmentId: apartment.id,
         },
+        update: {}, // Do nothing if already exists
       });
     }
 
