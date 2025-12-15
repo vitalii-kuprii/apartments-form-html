@@ -49,6 +49,7 @@ export interface DomRiaSearchParams {
   apartmentType: 'flat' | 'house';
   priceMin?: number;
   priceMax?: number;
+  currency?: 'USD' | 'EUR' | 'UAH'; // Currency for price filter (price_cur parameter)
   rooms?: number[];
   areaMin?: number;
   areaMax?: number;
@@ -130,6 +131,12 @@ export class DomRiaClient {
     queryParams.set('operation_type', String(OPERATION_TYPES[params.propertyType]));
     queryParams.set('state_id', String(cityMapping.stateId));
     queryParams.set('city_id', String(cityMapping.cityId));
+
+    // Currency for price filter (works for both rent and buy)
+    // price_cur: 1=USD, 2=EUR, 3=UAH
+    const currencyMap: Record<string, string> = { 'USD': '1', 'EUR': '2', 'UAH': '3' };
+    const priceCur = currencyMap[params.currency || 'UAH'] || '3';
+    queryParams.set('price_cur', priceCur);
 
     // Price filter - characteristic[235] for rent, characteristic[234] for buy
     const priceCharId = params.propertyType === 'rent' ? '235' : '234';

@@ -282,63 +282,127 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
   let apiFound = 0;
 
   try {
-    // Calculate combined search params (use widest range)
-    const priceMinValues = group.searches
-      .filter(s => s.priceMin !== null)
-      .map(s => s.priceMin!);
-    const priceMin = priceMinValues.length > 0 ? Math.min(...priceMinValues) : undefined;
-
-    const priceMaxValues = group.searches
-      .filter(s => s.priceMax !== null)
-      .map(s => s.priceMax!);
-    const priceMax = priceMaxValues.length > 0 ? Math.max(...priceMaxValues) : undefined;
-
-    // Collect all room values (smart: skip 4+ if nobody wants it)
-    const allRooms = new Set<number>();
-    group.searches.forEach(s => s.rooms.forEach(r => allRooms.add(r)));
-    // If no one selected 4+ rooms, we can safely skip them
-    const roomsArray = Array.from(allRooms).filter(r => r <= 3 || allRooms.has(4));
-
-    // Get last fetch timestamp for this city
-    const lastFetch = await getCityLastFetch(group.city);
-    // If first run, fetch last 24 hours; otherwise fetch since last successful run
-    const dateFrom = lastFetch
-      ? lastFetch
-      : new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    logger.domria.domriaSearchRequest(group.city, {
-      dateFrom: dateFrom.toISOString(),
-      priceMin,
-      priceMax,
-      rooms: roomsArray,
-      propertyType: group.propertyType,
-      apartmentType: group.apartmentType,
-      photosCountFrom: MIN_PHOTOS_COUNT,
-    });
-
-    // Search DOM.RIA with optimized filters
-    const searchResult = await client.search({
+    // ========== STEP 1: Log all searches in group ==========
+    logger.fetcher.info('fetch.group_searches', `${group.city} searches`, {
       city: group.city,
       propertyType: group.propertyType,
       apartmentType: group.apartmentType,
-      priceMin: priceMin,
-      priceMax: priceMax,
-      rooms: roomsArray.length > 0 ? roomsArray : undefined,
-      dateFrom: dateFrom,
-      photosCountFrom: MIN_PHOTOS_COUNT,
+      searchCount: group.searches.length,
+      searches: group.searches.map(s => ({
+        id: s.id,
+        priceMin: s.priceMin,
+        priceMax: s.priceMax,
+        currency: s.currency,
+        rooms: s.rooms,
+      })),
     });
 
-    // Track API request
-    await incrementApiStats('search');
-    metrics.domriaRequests.inc({ endpoint: 'search', status: 'success' });
+    // ========== STEP 2: Sub-group searches by currency ==========
+    const searchesByCurrency = new Map<string, typeof group.searches>();
+    for (const search of group.searches) {
+      const currency = search.currency || 'UAH';
+      if (!searchesByCurrency.has(currency)) {
+        searchesByCurrency.set(currency, []);
+      }
+      searchesByCurrency.get(currency)!.push(search);
+    }
+
+    // ========== STEP 3: Calculate shared params (rooms, date) ==========
+    const allRooms = new Set<number>();
+    group.searches.forEach(s => s.rooms.forEach(r => allRooms.add(r)));
+    const roomsArray = Array.from(allRooms).filter(r => r <= 3 || allRooms.has(4));
+
+    const lastFetch = await getCityLastFetch(group.city);
+    const dateFrom = lastFetch || new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // ========== STEP 4: API calls per currency, collect IDs ==========
+    const allApartmentIds = new Set<number>();
+
+    for (const [currency, searches] of searchesByCurrency) {
+      // Calculate price range for THIS currency only (valid to combine!)
+      const priceMinValues = searches.filter(s => s.priceMin !== null).map(s => s.priceMin!);
+      const priceMin = priceMinValues.length > 0 ? Math.min(...priceMinValues) : undefined;
+
+      const priceMaxValues = searches.filter(s => s.priceMax !== null).map(s => s.priceMax!);
+      const priceMax = priceMaxValues.length > 0 ? Math.max(...priceMaxValues) : undefined;
+
+      // Log currency subgroup
+      logger.fetcher.info('fetch.currency_subgroup', `${group.city} ${currency} subgroup`, {
+        city: group.city,
+        propertyType: group.propertyType,
+        currency,
+        searchCount: searches.length,
+        searches: searches.map(s => ({
+          id: s.id,
+          priceMin: s.priceMin,
+          priceMax: s.priceMax,
+        })),
+        combinedPriceMin: priceMin,
+        combinedPriceMax: priceMax,
+      });
+
+      logger.domria.domriaSearchRequest(group.city, {
+        dateFrom: dateFrom.toISOString(),
+        priceMin,
+        priceMax,
+        currency,
+        rooms: roomsArray,
+        propertyType: group.propertyType,
+        apartmentType: group.apartmentType,
+        photosCountFrom: MIN_PHOTOS_COUNT,
+      });
+
+      // Search DOM.RIA with currency-specific price filter
+      const searchResult = await client.search({
+        city: group.city,
+        propertyType: group.propertyType,
+        apartmentType: group.apartmentType,
+        priceMin,
+        priceMax,
+        currency: currency as 'USD' | 'EUR' | 'UAH',
+        rooms: roomsArray.length > 0 ? roomsArray : undefined,
+        dateFrom,
+        photosCountFrom: MIN_PHOTOS_COUNT,
+      });
+
+      // Track API request
+      await incrementApiStats('search');
+      metrics.domriaRequests.inc({ endpoint: 'search', status: 'success' });
+
+      // Log currency search results
+      logger.fetcher.info('fetch.currency_results', `${group.city} ${currency} API results`, {
+        city: group.city,
+        propertyType: group.propertyType,
+        currency,
+        apartmentCount: searchResult.items.length,
+        apartmentIds: searchResult.items.slice(0, 50),
+      });
+
+      // Add IDs to Set (automatically deduplicates!)
+      for (const id of searchResult.items) {
+        allApartmentIds.add(id);
+      }
+    }
+
+    // ========== STEP 5: Merged unique IDs ==========
+    const apartmentIdArray = [...allApartmentIds];
+    apiFound = apartmentIdArray.length;
+
+    logger.fetcher.info('fetch.merged_apartments', `${group.city} merged apartment IDs`, {
+      city: group.city,
+      propertyType: group.propertyType,
+      apartmentType: group.apartmentType,
+      currencySearches: searchesByCurrency.size,
+      totalUniqueIds: allApartmentIds.size,
+      apartmentIds: apartmentIdArray.slice(0, 50),
+    });
+
     metrics.apartmentsFetched.inc(
       { city: group.city, property_type: group.propertyType, apartment_type: group.apartmentType },
-      searchResult.items.length
+      apartmentIdArray.length
     );
 
-    logger.domria.domriaSearchResponse(group.city, searchResult.items.length, 0);
-
-    if (searchResult.items.length === 0) {
+    if (apartmentIdArray.length === 0) {
       logger.fetcher.debug('fetch.no_apartments', `No apartments found for ${group.city}`, {
         city: group.city,
         propertyType: group.propertyType,
@@ -347,75 +411,69 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
       return { newApartments, matchedSearches, apiFound: 0 };
     }
 
-    apiFound = searchResult.items.length;
-
-    logger.fetcher.info('fetch.search_results', `Found ${searchResult.count} total, fetching ${apiFound}`, {
-      city: group.city,
-      totalCount: searchResult.count,
-      itemsToFetch: searchResult.items.length,
-    });
-
-    // Get existing apartment IDs to avoid duplicates
+    // ========== STEP 6: Check existing in DB ==========
     const existingIds = await prisma.apartment.findMany({
       where: {
-        externalId: { in: searchResult.items.map(String) },
+        externalId: { in: apartmentIdArray.map(String) },
       },
-      select: { id: true, externalId: true },
+      select: { id: true, externalId: true, priceUsd: true, priceEur: true, priceUah: true, price: true, rooms: true, area: true, floor: true, isFromRealtor: true },
     });
     const existingExternalIds = new Set(existingIds.map(a => a.externalId));
-    const existingIdMap = new Map(existingIds.map(a => [a.externalId, a.id]));
+    const existingIdMap = new Map(existingIds.map(a => [a.externalId, a]));
 
     // Filter out apartments we already have
-    const newExternalIds = searchResult.items.filter(id => !existingExternalIds.has(String(id)));
+    const newExternalIds = apartmentIdArray.filter(id => !existingExternalIds.has(String(id)));
+
+    logger.fetcher.info('fetch.merged_apartments_filtered', `${group.city} apartments to fetch`, {
+      city: group.city,
+      propertyType: group.propertyType,
+      totalUniqueIds: apartmentIdArray.length,
+      newToFetch: newExternalIds.length,
+      alreadyInDb: existingExternalIds.size,
+    });
+
+    // Check matches for existing apartments
+    for (const [, existingApartment] of existingIdMap) {
+      const matches: string[] = [];
+      for (const search of group.searches) {
+        if (apartmentMatchesSearch(existingApartment, search)) {
+          // Check if not already sent to this search
+          const alreadySent = await prisma.sentApartment.findUnique({
+            where: {
+              searchId_apartmentId: {
+                searchId: search.id,
+                apartmentId: existingApartment.id,
+              },
+            },
+          });
+          if (!alreadySent) {
+            matches.push(search.id);
+          }
+        }
+      }
+      if (matches.length > 0) {
+        matchedSearches.set(existingApartment.id, matches);
+      }
+    }
 
     if (newExternalIds.length === 0) {
       logger.fetcher.info('fetch.all_existing', `All apartments already in database`, {
         city: group.city,
         propertyType: group.propertyType,
         apartmentType: group.apartmentType,
-        existingCount: searchResult.items.length,
+        existingCount: apartmentIdArray.length,
+        matchedExisting: matchedSearches.size,
       });
-
-      // Still check for matches with existing apartments
-      for (const [, apartmentId] of existingIdMap) {
-        const apartment = await prisma.apartment.findUnique({
-          where: { id: apartmentId },
-          select: { price: true, rooms: true, area: true, floor: true, isFromRealtor: true },
-        });
-
-        if (apartment) {
-          const matches: string[] = [];
-          for (const search of group.searches) {
-            if (apartmentMatchesSearch(apartment, search)) {
-              // Check if not already sent to this search
-              const alreadySent = await prisma.sentApartment.findUnique({
-                where: {
-                  searchId_apartmentId: {
-                    searchId: search.id,
-                    apartmentId: apartmentId,
-                  },
-                },
-              });
-              if (!alreadySent) {
-                matches.push(search.id);
-              }
-            }
-          }
-          if (matches.length > 0) {
-            matchedSearches.set(apartmentId, matches);
-          }
-        }
-      }
-
       return { newApartments, matchedSearches, apiFound };
     }
 
+    // ========== STEP 7: Fetch details for NEW apartments ONCE ==========
     logger.fetcher.info('fetch.fetching_details', `Fetching details for new apartments`, {
       city: group.city,
       propertyType: group.propertyType,
       apartmentType: group.apartmentType,
       newCount: newExternalIds.length,
-      externalIds: newExternalIds.slice(0, 10), // Log first 10 IDs for debugging
+      externalIds: newExternalIds.slice(0, 20),
     });
 
     // Fetch details for new apartments
@@ -425,6 +483,14 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
     await incrementApiStats('detail', apartmentDetails.length);
 
     for (const detail of apartmentDetails) {
+      // Log fetching each apartment
+      logger.fetcher.info('fetch.fetching_detail', `Fetching ${group.city}-${group.propertyType} apartment ${detail.realty_id}`, {
+        city: group.city,
+        propertyType: group.propertyType,
+        apartmentType: group.apartmentType,
+        externalId: detail.realty_id,
+      });
+
       const mappedApartment = mapDomRiaApartment(detail, group.propertyType, group.apartmentType);
 
       // Store in database
@@ -438,6 +504,20 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
       });
 
       newApartments.push({ id: created.id, apartment: mappedApartment });
+
+      // Log stored apartment
+      logger.fetcher.info('fetch.stored_apartment', `Stored ${group.city}-${group.propertyType} apartment ${created.id}`, {
+        city: group.city,
+        propertyType: group.propertyType,
+        apartmentType: group.apartmentType,
+        apartmentId: created.id,
+        externalId: mappedApartment.externalId,
+        priceUsd: mappedApartment.priceUsd,
+        priceEur: mappedApartment.priceEur,
+        priceUah: mappedApartment.priceUah,
+        rooms: mappedApartment.rooms,
+        area: mappedApartment.area,
+      });
 
       // Check which searches this apartment matches
       const matches: string[] = [];
@@ -464,31 +544,22 @@ async function fetchGroupApartments(group: SearchGroup): Promise<{
         );
       }
 
-      // Log stored apartment
-      logger.fetcher.apartmentStored(
-        {
-          apartmentId: created.id,
-          externalId: mappedApartment.externalId,
-          price: mappedApartment.price,
-          rooms: mappedApartment.rooms,
-          area: mappedApartment.area,
-          city: mappedApartment.city,
-        },
-        true
-      );
-
       metrics.apartmentsStored.inc({
         city: group.city,
         is_new: 'true',
       });
     }
 
-    logger.fetcher.info('fetch.group_stored', `Stored new apartments with matches`, {
+    // ========== STEP 8: Log group completion ==========
+    logger.fetcher.info('fetch.group_complete', `${group.city} group completed`, {
       city: group.city,
       propertyType: group.propertyType,
       apartmentType: group.apartmentType,
-      storedCount: newApartments.length,
-      matchedCount: matchedSearches.size,
+      currencySearches: searchesByCurrency.size,
+      totalApiCalls: searchesByCurrency.size,
+      totalUniqueApartments: allApartmentIds.size,
+      newApartmentsStored: newApartments.length,
+      matchedToSearches: matchedSearches.size,
     });
 
   } catch (error) {
