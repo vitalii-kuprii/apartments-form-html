@@ -253,6 +253,35 @@ function getCycleKeys(cycleId: string) {
   };
 }
 
+// Helper to schedule next cycle-start only if one doesn't already exist
+async function scheduleNextCycleIfNeeded(delay: number): Promise<boolean> {
+  if (!fetchQueue) return false;
+
+  // Check if cycle-start already exists in delayed/waiting/active states
+  const existingJobs = await fetchQueue.getJobs(['delayed', 'waiting', 'active']);
+  const existingCycleStarts = existingJobs.filter(j => j.data?.type === 'cycle-start');
+
+  if (existingCycleStarts.length > 0) {
+    logger.scheduler.info('cycle.schedule_skipped', 'Cycle-start already exists, skipping scheduling', {
+      existingCount: existingCycleStarts.length,
+      existingJobIds: existingCycleStarts.map(j => j.id),
+    });
+    return false;
+  }
+
+  await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
+    delay: delay > 0 ? delay : undefined,
+    jobId: `cycle-start-${Date.now()}`,
+  });
+
+  logger.scheduler.info('cycle.scheduled', 'Next cycle-start scheduled', {
+    delay,
+    delayMinutes: Math.round(delay / 1000 / 60),
+  });
+
+  return true;
+}
+
 // Process cycle-start job: creates city jobs
 async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
   const force = job.data.force === true;
@@ -264,12 +293,9 @@ async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
     logger.scheduler.cronJobSkipped({ jobName: 'cycle-start', forced: force, kyivHour }, skipReason);
     metrics.cronJobRuns.inc({ job_name: 'cycle-start', status: 'skipped', forced: String(force) });
 
-    // Schedule next cycle (unique jobId to avoid collision with completed jobs)
+    // Schedule next cycle only if one doesn't already exist
     const delay = getNextFetchDelayMs();
-    await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
-      delay,
-      jobId: `cycle-start-${Date.now()}`,
-    });
+    await scheduleNextCycleIfNeeded(delay);
     return;
   }
 
@@ -291,12 +317,9 @@ async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
   if (groups.length === 0) {
     logger.scheduler.info('cycle.no_groups', 'No active searches found', { cycleId });
 
-    // Schedule next cycle (unique jobId to avoid collision with completed jobs)
+    // Schedule next cycle only if one doesn't already exist
     const delay = getNextFetchDelayMs();
-    await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
-      delay,
-      jobId: `cycle-start-${Date.now()}`,
-    });
+    await scheduleNextCycleIfNeeded(delay);
     return;
   }
 
@@ -540,17 +563,9 @@ async function processCycleComplete(job: Job<CycleCompleteJobData>): Promise<Fet
   metrics.cronJobDuration.observe({ job_name: 'fetch_cycle' }, cycleDuration / 1000);
   metrics.fetchCycleDuration.observe(cycleDuration / 1000);
 
-  // Schedule next cycle (unique jobId to avoid collision with completed jobs)
+  // Schedule next cycle only if one doesn't already exist
   const delay = getNextFetchDelayMs();
-  await fetchQueue?.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
-    delay,
-    jobId: `cycle-start-${Date.now()}`,
-  });
-
-  logger.scheduler.info('cycle.next_scheduled', `Next cycle scheduled in ${Math.round(delay / 1000 / 60)} minutes`, {
-    delay,
-    kyivHour: getKyivHour(),
-  });
+  await scheduleNextCycleIfNeeded(delay);
 
   return {
     newApartments: totalNew,
@@ -786,39 +801,15 @@ export async function startScheduler(): Promise<void> {
 
   // Start first cycle - only if no cycle-start job already exists
   const kyivHour = getKyivHour();
+  const delay = shouldSkipFetch() ? getNextFetchDelayMs() : 0;
+  const scheduled = await scheduleNextCycleIfNeeded(delay);
 
-  // Check if cycle-start already scheduled (from previous run or incomplete cycle)
-  const existingJobs = await fetchQueue.getJobs(['delayed', 'waiting', 'active']);
-  const existingCycleStarts = existingJobs.filter(j => j.data?.type === 'cycle-start');
-  const hasCycleStart = existingCycleStarts.length > 0;
-
-  if (hasCycleStart) {
-    logger.scheduler.info('scheduler.started', 'Scheduler started - cycle-start already exists, skipping creation', {
-      kyivHour,
-      existingCycleStartCount: existingCycleStarts.length,
-      existingJobIds: existingCycleStarts.map(j => j.id),
-    });
-  } else if (shouldSkipFetch()) {
-    const delay = getNextFetchDelayMs();
-    await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
-      delay,
-      jobId: `cycle-start-${Date.now()}`,
-    });
-
-    logger.scheduler.info('scheduler.started', 'Scheduler started - night time, first cycle scheduled', {
-      kyivHour,
-      firstCycleDelay: delay,
-      firstCycleDelayMinutes: Math.round(delay / 1000 / 60),
-    });
-  } else {
-    await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
-      jobId: `cycle-start-${Date.now()}`,
-    });
-
-    logger.scheduler.info('scheduler.started', 'Scheduler started - day time, first cycle started', {
-      kyivHour,
-    });
-  }
+  logger.scheduler.info('scheduler.started', 'Scheduler started', {
+    kyivHour,
+    scheduled,
+    nightTime: shouldSkipFetch(),
+    delayMinutes: Math.round(delay / 1000 / 60),
+  });
 
   updateQueueMetrics();
 }
