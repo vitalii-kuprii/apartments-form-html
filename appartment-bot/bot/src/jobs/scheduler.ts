@@ -107,59 +107,84 @@ function getKyivHour(): number {
   return parseInt(kyivTime, 10);
 }
 
+// Get Kyiv hour and minute for a specific date
+function getKyivTime(date: Date): { hour: number; minute: number } {
+  const kyivFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Kyiv',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = kyivFormatter.formatToParts(date);
+  return {
+    hour: parseInt(parts.find(p => p.type === 'hour')?.value || '0'),
+    minute: parseInt(parts.find(p => p.type === 'minute')?.value || '0'),
+  };
+}
+
+// Check if a Kyiv hour is in sleep window (23:00 - 07:00)
+function isSleepTime(hour: number): boolean {
+  return hour >= 23 || hour < 7;
+}
+
+// Calculate delay until 7:00 AM Kyiv time from a given date
+function getDelayUntil7AM(fromDate: Date): number {
+  const { hour, minute } = getKyivTime(fromDate);
+  const hoursUntil7 = hour >= 23 ? (24 - hour + 7) : (7 - hour);
+  return hoursUntil7 * 60 * 60 * 1000 - minute * 60 * 1000;
+}
+
 // Calculate delay until next fetch based on Kyiv time
+// Always ensures the scheduled time falls in active hours (07:00 - 23:00)
 function getNextFetchDelayMs(): number {
-  const hour = getKyivHour();
+  const now = new Date();
+  const { hour } = getKyivTime(now);
 
-  // Night: 23:00 - 07:00 - NO FETCH, wait until 7am
-  if (hour >= 23 || hour < 7) {
-    const now = new Date();
-    const kyivFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Kyiv',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-
-    const currentKyivParts = kyivFormatter.formatToParts(now);
-    const currentMinute = parseInt(currentKyivParts.find(p => p.type === 'minute')?.value || '0');
-
-    const hoursUntil7 = hour >= 23 ? (24 - hour + 7) : (7 - hour);
-    const msUntil7 = hoursUntil7 * 60 * 60 * 1000 - currentMinute * 60 * 1000;
-
-    logger.scheduler.cronScheduled(msUntil7, hour);
-    metrics.cronNextRunDelay.set(msUntil7 / 1000);
+  // If currently night time, wait until 7 AM
+  if (isSleepTime(hour)) {
+    const delay = getDelayUntil7AM(now);
+    logger.scheduler.cronScheduled(delay, hour);
+    metrics.cronNextRunDelay.set(delay / 1000);
     metrics.cronKyivHour.set(hour);
-    return msUntil7;
+    return delay;
   }
 
-  // Morning: 07:00 - 09:00 - 1 hour interval
+  // Calculate base delay based on time of day
+  let baseDelay: number;
   if (hour >= 7 && hour < 9) {
-    const delay = 60 * 60 * 1000;
+    // Morning: 1 hour interval
+    baseDelay = 60 * 60 * 1000;
+  } else if (hour >= 9 && hour < 19) {
+    // Peak hours: 30 min interval
+    baseDelay = 30 * 60 * 1000;
+  } else {
+    // Evening (19:00 - 23:00): 1 hour interval
+    baseDelay = 60 * 60 * 1000;
+  }
+
+  // Check if scheduled time would fall in sleep window
+  const scheduledTime = new Date(now.getTime() + baseDelay);
+  const scheduledKyiv = getKyivTime(scheduledTime);
+
+  if (isSleepTime(scheduledKyiv.hour)) {
+    // Would run during sleep - schedule for 7 AM instead
+    const delay = getDelayUntil7AM(now);
+    logger.scheduler.info('cycle.sleep_adjusted', 'Adjusted schedule to skip sleep window', {
+      originalDelay: baseDelay,
+      adjustedDelay: delay,
+      currentHour: hour,
+      wouldRunAt: scheduledKyiv.hour,
+    });
     logger.scheduler.cronScheduled(delay, hour);
     metrics.cronNextRunDelay.set(delay / 1000);
     metrics.cronKyivHour.set(hour);
     return delay;
   }
 
-  // Peak hours: 09:00 - 19:00 - 30 min interval
-  if (hour >= 9 && hour < 19) {
-    const delay = 30 * 60 * 1000;
-    logger.scheduler.cronScheduled(delay, hour);
-    metrics.cronNextRunDelay.set(delay / 1000);
-    metrics.cronKyivHour.set(hour);
-    return delay;
-  }
-
-  // Evening: 19:00 - 23:00 - 1 hour interval
-  const delay = 60 * 60 * 1000;
-  logger.scheduler.cronScheduled(delay, hour);
-  metrics.cronNextRunDelay.set(delay / 1000);
+  logger.scheduler.cronScheduled(baseDelay, hour);
+  metrics.cronNextRunDelay.set(baseDelay / 1000);
   metrics.cronKyivHour.set(hour);
-  return delay;
+  return baseDelay;
 }
 
 // Check if we should skip fetching (night time)
