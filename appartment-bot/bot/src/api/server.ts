@@ -110,9 +110,11 @@ async function setupBullBoard() {
   });
 
   // Protect all /admin routes with Basic Auth
-  server.addHook('onRequest', async (request, reply) => {
+  server.addHook('onRequest', (request, reply, done) => {
     if (request.url.startsWith('/admin/')) {
-      await (server as any).basicAuth(request, reply);
+      (server as any).basicAuth(request, reply, done);
+    } else {
+      done();
     }
   });
 
