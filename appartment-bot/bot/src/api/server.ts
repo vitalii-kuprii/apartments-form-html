@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyBasicAuth from '@fastify/basic-auth';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
 import { FastifyAdapter } from '@bull-board/fastify';
@@ -81,6 +82,15 @@ server.get('/metrics', async (_request, reply) => {
 
 // Bull Board visual dashboard for BullMQ job monitoring
 async function setupBullBoard() {
+  const username = process.env.BULL_BOARD_USERNAME;
+  const password = process.env.BULL_BOARD_PASSWORD;
+
+  // Disable dashboard if no credentials configured
+  if (!username || !password) {
+    console.log('[BullBoard] Dashboard disabled - BULL_BOARD_USERNAME and BULL_BOARD_PASSWORD must be set');
+    return;
+  }
+
   const fetchQueue = getFetchQueue();
   const notificationQueue = getNotificationQueue();
 
@@ -88,6 +98,25 @@ async function setupBullBoard() {
     console.log('[BullBoard] Queue not available yet. Dashboard will not be mounted.');
     return;
   }
+
+  // Register Basic Auth for admin routes
+  await server.register(fastifyBasicAuth, {
+    validate: async (user, pass, _req, _reply, done) => {
+      if (user !== username || pass !== password) {
+        done(new Error('Invalid credentials'));
+        return;
+      }
+      done();
+    },
+    authenticate: { realm: 'Bull Board Admin' },
+  });
+
+  // Protect all /admin routes with Basic Auth
+  server.addHook('onRequest', async (request, reply) => {
+    if (request.url.startsWith('/admin/')) {
+      await (server as any).basicAuth(request, reply);
+    }
+  });
 
   const serverAdapter = new FastifyAdapter();
   serverAdapter.setBasePath('/admin/queues');
@@ -108,7 +137,7 @@ async function setupBullBoard() {
     basePath: '/admin/queues',
   });
 
-  console.log('[BullBoard] Dashboard available at /admin/queues');
+  console.log('[BullBoard] Dashboard available at /admin/queues (protected with Basic Auth)');
 }
 
 export async function startApiServer() {
