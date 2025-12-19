@@ -101,12 +101,10 @@ async function setupBullBoard() {
 
   // Register Basic Auth for admin routes
   await server.register(fastifyBasicAuth, {
-    validate: async (user, pass, _req, _reply, done) => {
+    validate: async (user, pass) => {
       if (user !== username || pass !== password) {
-        done(new Error('Invalid credentials'));
-        return;
+        throw new Error('Invalid credentials');
       }
-      done();
     },
     authenticate: { realm: 'Bull Board Admin' },
   });
