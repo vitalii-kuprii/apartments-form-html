@@ -18,7 +18,7 @@
   "dependencies": {
     "@bull-board/api": "^5.23.0",
     "@bull-board/fastify": "^5.23.0",
-    "@fastify/basic-auth": "^6.2.0",
+    "@fastify/basic-auth": "^5.1.1",
     "@fastify/cors": "^8.5.0",
     "@grammyjs/conversations": "^2.1.1",
     "@opentelemetry/api-logs": "^0.208.0",
