@@ -130,7 +130,9 @@ function isSleepTime(hour: number): boolean {
 // Calculate delay until 7:00 AM Kyiv time from a given date
 function getDelayUntil7AM(fromDate: Date): number {
   const { hour, minute } = getKyivTime(fromDate);
-  const hoursUntil7 = hour >= 23 ? (24 - hour + 7) : (7 - hour);
+  // For hours >= 7 (after 7 AM), wait until next day's 7 AM
+  // For hours < 7 (before 7 AM), wait until 7 AM same day
+  const hoursUntil7 = hour >= 7 ? (24 - hour + 7) : (7 - hour);
   return hoursUntil7 * 60 * 60 * 1000 - minute * 60 * 1000;
 }
 
