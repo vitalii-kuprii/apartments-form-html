@@ -17,6 +17,8 @@ const CITY_TIMESTAMPS_KEY = 'city:timestamps';
 // Configuration
 const FETCH_CONCURRENCY = parseInt(process.env.FETCH_CONCURRENCY || '5', 10);
 const CYCLE_TTL_SECONDS = 1800; // 30 minutes TTL for cycle data
+const MIN_CYCLE_INTERVAL_MS = 5 * 60 * 1000; // Minimum 5 minutes between cycles (safety against runaway loops)
+const LAST_CYCLE_KEY = 'scheduler:lastCycleStart';
 
 // BullMQ Queues
 let fetchQueue: Queue | null = null;
@@ -296,14 +298,44 @@ async function scheduleNextCycleIfNeeded(delay: number): Promise<boolean> {
     return false;
   }
 
+  // Safety: Enforce minimum interval between cycles to prevent runaway loops
+  const lastCycleTime = await redis.get(LAST_CYCLE_KEY);
+  const now = Date.now();
+  let effectiveDelay = delay;
+
+  if (lastCycleTime) {
+    const timeSinceLastCycle = now - parseInt(lastCycleTime, 10);
+    const minDelayNeeded = MIN_CYCLE_INTERVAL_MS - timeSinceLastCycle;
+
+    if (minDelayNeeded > effectiveDelay) {
+      logger.scheduler.warn('cycle.delay_enforced', 'Enforcing minimum cycle interval', {
+        requestedDelay: delay,
+        enforcedDelay: minDelayNeeded,
+        timeSinceLastCycle,
+        minInterval: MIN_CYCLE_INTERVAL_MS,
+      });
+      effectiveDelay = minDelayNeeded;
+    }
+  }
+
+  // Ensure delay is never negative
+  if (effectiveDelay < 0) {
+    logger.scheduler.warn('cycle.negative_delay_blocked', 'Blocked negative delay, using minimum interval', {
+      requestedDelay: delay,
+      effectiveDelay: MIN_CYCLE_INTERVAL_MS,
+    });
+    effectiveDelay = MIN_CYCLE_INTERVAL_MS;
+  }
+
   await fetchQueue.add('cycle-start', { type: 'cycle-start' } as CycleStartJobData, {
-    delay: delay > 0 ? delay : undefined,
+    delay: effectiveDelay > 0 ? effectiveDelay : undefined,
     jobId: `cycle-start-${Date.now()}`,
   });
 
   logger.scheduler.info('cycle.scheduled', 'Next cycle-start scheduled', {
-    delay,
-    delayMinutes: Math.round(delay / 1000 / 60),
+    requestedDelay: delay,
+    effectiveDelay,
+    delayMinutes: Math.round(effectiveDelay / 1000 / 60),
   });
 
   return true;
@@ -328,6 +360,9 @@ async function processCycleStart(job: Job<CycleStartJobData>): Promise<void> {
 
   const cycleId = uuidv4();
   const keys = getCycleKeys(cycleId);
+
+  // Record cycle start time for rate limiting
+  await redis.set(LAST_CYCLE_KEY, Date.now().toString());
 
   logger.scheduler.info('cycle.started', `Starting fetch cycle ${cycleId}`, {
     cycleId,
